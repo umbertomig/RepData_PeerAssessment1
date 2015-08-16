@@ -8,18 +8,100 @@ output:
 
 ## Loading and preprocessing the data
 
+The data is in the file "activity.zip". We have first to unzip the file in order to load the data. To read the file without unzip it we have to use the function `unz` in R.
 
+```{r}
+dat <- read.csv(unz('activity.zip','activity.csv'))
+head(dat)
+```
 
 ## What is mean total number of steps taken per day?
 
+To sum up the total number of steps taken each day:
 
+```{r}
+step_byday <- tapply(dat$steps, dat$date, FUN = sum, na.rm=T)
+```
+
+And for the histogram of the total number of steps taken each day:
+
+```{r}
+hist(step_byday, main='Histogram - Total Steps Taken Each Day')
+mean_step <- mean(step_byday)
+median_step <- median(step_byday)
+```
+
+And the average number of steps is `r round(mean_step, digits=2)`, with median number of steps equal `r median_step`.
 
 ## What is the average daily activity pattern?
 
+For that we have to compute the average by interval. It is the same structure as in the previous problem, but with the index being the interval:
+
+```{r}
+step_byinterval <- tapply(dat$steps, dat$interval, FUN = mean, na.rm=T)
+plot(step_byinterval~names(step_byinterval), main='Average Steps by Daily Interval', type='l')
+```
+
+And the interval with maximum number of steps is the number `r names(which.max(step_byinterval))`.
 
 
 ## Imputing missing values
 
+The total number of missing values in the dataset is:
 
+```{r}
+sum(is.na(dat$steps))
+tapply(dat$steps, dat$date, FUN = f <- function (x) sum(is.na(x)))
+tapply(dat$steps, dat$interval, FUN = f <- function (x) sum(is.na(x)))
+```
+
+And thus, it seems that the missing values are concentrated in some dates in the dataset.
+
+To imput the missing values I use simple the mean of the values in the same interval.
+
+```{r}
+dat_imp <- dat
+for (i in 1:dim(dat_imp)[1]) {
+  if (is.na(dat_imp$steps[i])) dat_imp$steps[i] = step_byinterval[which(names(step_byinterval)==dat_imp$interval[i])]
+}
+head(dat_imp)
+```
+
+```{r}
+step_byday_imp <- tapply(dat_imp$steps, dat_imp$date, FUN = sum)
+hist(step_byday_imp, 
+     main = 'Histogram - Total Steps Taken Each Day',
+     sub = '(Imputed Dataset)')
+mean_step_imp <- mean(step_byday_imp)
+median_step_imp <- median(step_byday_imp)
+```
+
+And the average number of steps is `r round(mean_step_imp, digits=2)`, with median number of steps equal `r round(median_step_imp, digits=2)`. The original values were `r round(mean_step, digits=2)` for the mean and `r round(median_step, digits=2)` for the median. One interesting result from the way I imputted here is that the mean and median of the imputed dataset are the same.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+To investigate that we create the weekdays names in the data, and an indicator for the weekend:
+
+```{r}
+dat$weekd <- weekdays(as.Date(dat$date))
+dat$weekend <- as.numeric(dat$weekd=='Sunday')+as.numeric(dat$weekd=='Saturday')
+head(dat)
+```
+
+It looks OK. Now to generate the plot we have to generate the dataset (that can be done more efficiently with *reshape*...):
+
+```{r}
+step_byinterval_week <- data.frame(tapply(dat$steps, list(dat$interval, dat$weekend), FUN = mean, na.rm=T))
+dfsteps <- data.frame(interval = as.numeric(row.names(step_byinterval_week)), steps = step_byinterval_week[,1], weekend = 'Weekdays')
+dfsteps <- rbind(dfsteps, data.frame(interval = as.numeric(row.names(step_byinterval_week)), steps = step_byinterval_week[,2], weekend = 'Weekends'))
+head(dfsteps)
+```
+
+And the plot shows us the following results:
+
+```{r}
+library(lattice)
+xyplot(steps~interval|weekend, data = dfsteps, type='l', layout = c(1, 2))
+```
+
+And it seems that in the weekends the steps are more evenly distributed throughout the day.
